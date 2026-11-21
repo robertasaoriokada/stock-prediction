@@ -1,11 +1,10 @@
 import pandas as pd
 import xgboost as xgb
-import matplotlib.pyplot as plt
 from scipy.stats import binomtest
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 
-from .library import np
-from .metrics import evaluate  # ajuste para o nome real do seu módulo
+from utils.library import np
+from utils.metrics import evaluate  # ajuste para o nome real do seu módulo
 
 DEFAULT_PARAM_GRID = {
     "n_estimators": [100, 300, 500],
@@ -29,7 +28,6 @@ def run_xgbooster(
     n_lags=3,
     param_grid=None,
     n_splits=5,
-    shap_plot=True,
     verbose=True,
 ):
     """
@@ -46,14 +44,12 @@ def run_xgbooster(
             raise KeyError(f"Coluna '{col}' não existe no dataset de {nome}. Colunas: {list(df.columns)}")
 
     n_train = len(train_dataset)
-    full = pd.concat([train_dataset, test_dataset])
     test_index = test_dataset.index
-    full = full.reset_index(drop=True)
+    full = pd.concat([train_dataset, test_dataset]).reset_index(drop=True)
 
     # 1. Features: open sem lag; todas as outras colunas numéricas (inclusive o alvo) com lag
     safe = [open_col] if open_col in full.columns else []
-    numeric = full.select_dtypes("number").columns
-    to_lag = [c for c in numeric if c not in safe]  # inclui o alvo
+    to_lag = [c for c in full.select_dtypes("number").columns if c not in safe]
     full = _make_lags(full, to_lag, n_lags)
     lag_cols = [c for c in full.columns if "_lag_" in c]
     features = safe + lag_cols
@@ -94,34 +90,24 @@ def run_xgbooster(
     resultado = evaluate(f"XGBoost {stock_name}", y_test, ontem, preds)
     resultado_naive = evaluate(f"Naive {stock_name}", y_test, ontem, ontem)
 
-    # 6. Teste binomial da acurácia direcional (H0: 50%)
+    # 6. Teste binomial da acurácia acerto direcional (H0: 50%)
     acertos = np.sign(y_test.values - ontem.values) == np.sign(preds.values - ontem.values)
     p_valor = binomtest(int(acertos.sum()), len(acertos), p=0.5).pvalue
     if verbose:
         print(f"p-valor (teste binomial, acurácia direcional): {p_valor:.4f}")
 
-    # 7. SHAP no teste
-    explainer = shap_values = None
-    if shap_plot:
-        import shap
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer(X_test)
-        shap.summary_plot(shap_values, X_test, show=False)
-        plt.title(f"SHAP - XGBoost ({stock_name.upper()})")
-        plt.tight_layout()
-        plt.show()
-
     return {
         "stock": stock_name,
-        "order": "XGB",              # mantém a coluna 'order' das tabelas comparativas
+        "order": "XGB",
         "model": model,
         "best_params": grid.best_params_,
+        "features": features,
+        "X_test": X_test,            # usado depois pelo módulo de SHAP
         "predictions": preds,
         "real": y_test,
         "ontem": ontem,
         "dir_pvalue": p_valor,
         "naive_rmse": resultado_naive["rmse"],
         "naive_mape": resultado_naive["mape"],
-        "shap_values": shap_values,
         **resultado,                 # rmse, mae, mape, dir_acc
     }
