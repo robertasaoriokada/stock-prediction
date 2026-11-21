@@ -5,8 +5,3 @@ import yfinance as yf
 from bcb import sgs
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-
-
-from models.xgboost import *
-from models.arima import *
-
