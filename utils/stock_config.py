@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_FOLDER = ROOT / "data"
  
 # Período e divisão treino/teste
-START = "2015-01-01"
+START = "2012-03-01"
 END = "2025-12-31"
 TRAIN_FRAC = 0.8
 SEED = 42
