@@ -1,0 +1,77 @@
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+from .library import pd, np
+
+
+def _dates(df):
+    """Usa a coluna 'date' se existir; senão, o índice (que deve ser de datas)."""
+    if "date" in df.columns:
+        return pd.to_datetime(df["date"]).values
+    return pd.to_datetime(df.index).values
+
+
+def plot_forecast(
+    train,
+    test,
+    predictions,
+    stock_name,
+    model_name="ARIMA",
+    ticker_label=None,
+    target="close",
+    zoom_train=120,
+    month_interval=3,
+    save_path=None,
+    show=True,
+):
+    """
+    Gráfico de previsão vs. real, para qualquer ação e qualquer modelo.
+
+    stock_name:   prefixo do dataset (ex.: "vale", "petro", "itau") -> coluna "<prefixo>_close".
+    model_name:   texto da legenda/título (ex.: "ARIMA(1,1,0)", "LSTM").
+    ticker_label: nome exibido no título (ex.: "PETR4"). Padrão: stock_name em maiúsculas.
+    zoom_train:   quantos dias do final do treino mostrar (None = treino inteiro).
+    save_path:    se None, grava em results/<modelo>/<stock>_<modelo>.png.
+    """
+    col = f"{stock_name}_{target}"
+    ticker_label = ticker_label or stock_name.upper()
+    predictions = np.asarray(predictions, dtype=float)
+
+    if len(predictions) != len(test):
+        raise ValueError(f"Previsões ({len(predictions)}) e teste ({len(test)}) têm tamanhos diferentes.")
+
+    zoom = train if zoom_train is None else train.iloc[-zoom_train:]
+
+    fig, ax = plt.subplots(figsize=(14, 6), dpi=300)
+
+    ax.plot(_dates(zoom), zoom[col], label="Treino (Histórico Recente)",
+            color="#1f77b4", linewidth=1.5)
+    ax.plot(_dates(test), test[col], label="Teste (Real)",
+            color="#2ca02c", linewidth=2)
+    ax.plot(_dates(test), predictions, label=f"Previsão {model_name}",
+            color="#d62728", linestyle="--", linewidth=1.8)
+
+    ax.set_title(f"Comparativo de Previsão: {model_name} vs. Preço Real ({ticker_label})",
+                 fontsize=14, pad=15, fontweight="bold")
+    ax.set_xlabel("Data", fontsize=12)
+    ax.set_ylabel("Preço de Fechamento (R$)", fontsize=12)
+    ax.legend(loc="upper left", fontsize=11, frameon=True)
+    ax.grid(True, linestyle=":", alpha=0.6)
+
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%Y"))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=month_interval))
+    plt.setp(ax.get_xticklabels(), rotation=45)
+
+    fig.tight_layout()
+
+    if save_path is None:
+        slug = model_name.split("(")[0].lower()
+        save_path = Path("results") / slug / f"{stock_name}_{slug}.png"
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
