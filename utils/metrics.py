@@ -1,5 +1,8 @@
-"""Split temporal e métricas, iguais para todos os modelos."""
-from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
+from sklearn.metrics import (
+    mean_squared_error,
+    mean_absolute_percentage_error,
+    mean_absolute_error,
+)
 
 from .library import np
 from .stock_config import TRAIN_FRAC
@@ -10,15 +13,22 @@ def split_temporal(database, train_frac=TRAIN_FRAC):
     return database.iloc[:cut], database.iloc[cut:]
 
 
-def evaluate(name, real, past, predicted):
+def evaluate(nome, real, ontem, previsto):
     """RMSE, MAE, MAPE e acurácia direcional (direção medida contra o preço real de ontem)."""
-    mae = mean_absolute_error(real, predicted)
-    rmse = np.sqrt(mean_squared_error(real, predicted))
-    mape = mean_absolute_percentage_error(real, predicted)
-    if np.all(np.asarray(predicted) == np.asarray(past)):
-        direction_val, direction = np.nan, "n/a"
+    real, ontem, previsto = (np.asarray(x, dtype=float) for x in (real, ontem, previsto))
+
+    rmse = np.sqrt(mean_squared_error(real, previsto))
+    mae = mean_absolute_error(real, previsto)
+    mape = mean_absolute_percentage_error(real, previsto)
+
+    if np.allclose(previsto, ontem, rtol=0, atol=1e-8):
+        dir_val, direcao = np.nan, "n/a"
     else:
-        direction_val = np.mean(np.sign(real - past) == np.sign(predicted - past))
-        direction = f"{direction_val:.2%}"
-        print(f"{name:<22} RMSE: {rmse:.4f} | MAE: {mae:.4f} | MAPE: {mape:.2%} | Acurácia direcional: {direction}")
-    return {"rmse": rmse, "mae": mae, "mape": mape, "dir_acc": direction_val}
+        dir_val = np.mean(np.sign(real - ontem) == np.sign(previsto - ontem))
+        direcao = f"{dir_val:.2%}"
+
+    print(
+        f"{nome:<22} RMSE: {rmse:.4f} | MAE: {mae:.4f} | "
+        f"MAPE: {mape:.2%} | Acurácia direcional: {direcao}"
+    )
+    return {"rmse": rmse, "mae": mae, "mape": mape, "dir_acc": dir_val}
