@@ -97,11 +97,13 @@ def plot_forecast(
 
 
 def plot_forecast_30(res, train_dataset, test_dataset, stock_name, target="close",
-                  origem=None, zoom=60, titulo=None, save_path=None):
+                     origem=None, zoom=60, titulo=None, save_path=None,
+                     model_name="LSTM"):
     """
-    Plota uma janela de previsão do run_lstm_30.
+    Plota uma janela de previsão de 30 dias (run_lstm_30, run_arima_30, ...).
       origem=None            -> previsão futura (depois do fim da base, sem preço real)
       origem="2025-03-31"    -> backtest a partir da origem mais próxima dessa data, com o preço real
+    model_name: texto da legenda/título (ex.: "LSTM", "ARIMA(1,1,0)").
     Usa plt, pd e np já importados no topo do módulo de plots.
     """
     full = pd.concat([train_dataset, test_dataset])
@@ -125,7 +127,7 @@ def plot_forecast_30(res, train_dataset, test_dataset, stock_name, target="close
         ax.plot([ref, *df.index], [ultimo, *df["real"]], color="#2ca02c", linewidth=2,
                 label=f"Real (próximos {n} dias)")
     ax.plot([ref, *df.index], [ultimo, *df["previsao"]], color="#ff7f0e", linestyle="--",
-            linewidth=1.8, label=f"Previsão LSTM ({n} dias)")
+            linewidth=1.8, label=f"Previsão {model_name} ({n} dias)")
     ax.axhline(ultimo, color="#7f7f7f", linestyle=":", linewidth=1.3,
                label="Baseline Naïve (último fechamento)")
     ax.axvline(ref, color="k", linestyle=":", alpha=0.4)
@@ -135,9 +137,9 @@ def plot_forecast_30(res, train_dataset, test_dataset, stock_name, target="close
             rmse = np.sqrt(((df["real"] - df["previsao"]) ** 2).mean())
             rmse_naive = np.sqrt(((df["real"] - ultimo) ** 2).mean())
             titulo = (f"Backtest de {n} dias a partir de {ref:%d/%m/%Y} | "
-                      f"RMSE LSTM {rmse:.2f} vs. Naïve {rmse_naive:.2f}")
+                      f"RMSE {model_name} {rmse:.2f} vs. Naïve {rmse_naive:.2f}")
         else:
-            titulo = f"Previsão futura de {n} dias — {stock_name.upper()}"
+            titulo = f"Previsão futura de {n} dias — {stock_name.upper()} ({model_name})"
     ax.set_title(titulo, fontsize=14, fontweight="bold")
     ax.set_xlabel("Data", fontsize=12)
     ax.set_ylabel("Preço de Fechamento (R$)", fontsize=12)
@@ -148,4 +150,3 @@ def plot_forecast_30(res, train_dataset, test_dataset, stock_name, target="close
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.show()
-    return fig
