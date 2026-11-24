@@ -94,3 +94,58 @@ def plot_forecast(
 
     if show:
         plt.show()
+
+
+def plot_forecast_30(res, train_dataset, test_dataset, stock_name, target="close",
+                  origem=None, zoom=60, titulo=None, save_path=None):
+    """
+    Plota uma janela de previsão do run_lstm_30.
+      origem=None            -> previsão futura (depois do fim da base, sem preço real)
+      origem="2025-03-31"    -> backtest a partir da origem mais próxima dessa data, com o preço real
+    Usa plt, pd e np já importados no topo do módulo de plots.
+    """
+    full = pd.concat([train_dataset, test_dataset])
+    datas = pd.to_datetime(full["date"]).reset_index(drop=True)
+    precos = full[f"{stock_name}_{target}"].astype(float).reset_index(drop=True)
+
+    if origem is None:
+        df, ref = res["futuro"], datas.iloc[-1]
+    else:
+        ref = min(res["backtest"], key=lambda d: abs(d - pd.Timestamp(origem)))
+        df = res["backtest"][ref]
+    fim = int(datas.searchsorted(ref, side="right"))     # 1ª posição depois da origem
+    ultimo = precos.iloc[fim - 1]
+    n = len(df)
+    tem_real = df["real"].notna().any()
+
+    fig, ax = plt.subplots(figsize=(14, 6), dpi=150)
+    ax.plot(datas.iloc[max(0, fim - zoom):fim], precos.iloc[max(0, fim - zoom):fim],
+            color="#1f77b4", linewidth=1.8, label="Histórico (conhecido)")
+    if tem_real:
+        ax.plot([ref, *df.index], [ultimo, *df["real"]], color="#2ca02c", linewidth=2,
+                label=f"Real (próximos {n} dias)")
+    ax.plot([ref, *df.index], [ultimo, *df["previsao"]], color="#ff7f0e", linestyle="--",
+            linewidth=1.8, label=f"Previsão LSTM ({n} dias)")
+    ax.axhline(ultimo, color="#7f7f7f", linestyle=":", linewidth=1.3,
+               label="Baseline Naïve (último fechamento)")
+    ax.axvline(ref, color="k", linestyle=":", alpha=0.4)
+
+    if titulo is None:
+        if tem_real:
+            rmse = np.sqrt(((df["real"] - df["previsao"]) ** 2).mean())
+            rmse_naive = np.sqrt(((df["real"] - ultimo) ** 2).mean())
+            titulo = (f"Backtest de {n} dias a partir de {ref:%d/%m/%Y} | "
+                      f"RMSE LSTM {rmse:.2f} vs. Naïve {rmse_naive:.2f}")
+        else:
+            titulo = f"Previsão futura de {n} dias — {stock_name.upper()}"
+    ax.set_title(titulo, fontsize=14, fontweight="bold")
+    ax.set_xlabel("Data", fontsize=12)
+    ax.set_ylabel("Preço de Fechamento (R$)", fontsize=12)
+    ax.legend(loc="upper left")
+    ax.grid(True, linestyle=":", alpha=0.6)
+    plt.setp(ax.get_xticklabels(), rotation=30)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.show()
+    return fig
